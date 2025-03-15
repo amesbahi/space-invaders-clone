@@ -1,0 +1,186 @@
+<html>
+<head>
+    <title>Space Invaders</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        #score {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 20px;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div id="score">Score: 0</div>
+    <script>
+        // Set up the Three.js scene
+        const scene = new THREE.Scene();
+        const camera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 100);
+        camera.position.z = 5;
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Create the player's spaceship
+        const playerMesh = new THREE.Mesh(
+            new THREE.BoxGeometry(1, 1, 1),
+            new THREE.MeshBasicMaterial({ color: 0x00ff00 })
+        );
+        playerMesh.position.set(0, -9, 0);
+        scene.add(playerMesh);
+
+        // Create the group of aliens
+        const alienGroup = new THREE.Group();
+        const alienSpacing = 1.5;
+        const alienRows = 3;
+        const alienCols = 5;
+        const maxRx = ((alienCols - 1) / 2) * alienSpacing; // Rightmost alien offset
+        const minRx = -maxRx; // Leftmost alien offset
+
+        for (let row = 0; row < alienRows; row++) {
+            for (let col = 0; col < alienCols; col++) {
+                const alienMesh = new THREE.Mesh(
+                    new THREE.BoxGeometry(1, 1, 1),
+                    new THREE.MeshBasicMaterial({ color: 0xff0000 })
+                );
+                alienMesh.position.set(
+                    (col - (alienCols - 1) / 2) * alienSpacing,
+                    row * alienSpacing,
+                    0
+                );
+                alienGroup.add(alienMesh);
+            }
+        }
+        alienGroup.position.set(0, 5, 0);
+        scene.add(alienGroup);
+
+        // Set up input handling
+        let leftPressed = false;
+        let rightPressed = false;
+        let spacePressed = false;
+
+        window.addEventListener('keydown', (event) => {
+            if (event.key === 'ArrowLeft') leftPressed = true;
+            else if (event.key === 'ArrowRight') rightPressed = true;
+            else if (event.key === ' ') spacePressed = true;
+        });
+
+        window.addEventListener('keyup', (event) => {
+            if (event.key === 'ArrowLeft') leftPressed = false;
+            else if (event.key === 'ArrowRight') rightPressed = false;
+            else if (event.key === ' ') spacePressed = false;
+        });
+
+        // Manage bullets
+        let bullets = [];
+        const bulletSpeed = 0.1;
+        const shotInterval = 500; // milliseconds
+        let lastShotTime = 0;
+
+        // Alien movement
+        let alienVelocity = { x: 0.05, y: 0 };
+
+        // Score tracking
+        let score = 0;
+        const scoreElement = document.getElementById('score');
+        
+        function updateScoreDisplay() {
+            scoreElement.textContent = 'Score: ' + score;
+        }
+
+        // Game update loop
+        function update() {
+            const currentTime = Date.now();
+
+            // Check if aliens reach the bottom
+            if (alienGroup.children.some(alien => {
+                const alienWorldPos = new THREE.Vector3();
+                alien.getWorldPosition(alienWorldPos);
+                return alienWorldPos.y <= -9;
+            })) {
+                scoreElement.textContent = 'Game Over! Final Score: ' + score;
+                return;
+            }
+
+            // Check if all aliens are destroyed
+            if (alienGroup.children.length === 0) {
+                scoreElement.textContent = 'You Win! Final Score: ' + score;
+                return;
+            }
+
+            // Player movement
+            const playerSpeed = 0.1;
+            if (leftPressed) playerMesh.position.x -= playerSpeed;
+            if (rightPressed) playerMesh.position.x += playerSpeed;
+            playerMesh.position.x = Math.max(-8.5, Math.min(8.5, playerMesh.position.x));
+
+            // Shooting
+            if (spacePressed && currentTime - lastShotTime > shotInterval) {
+                const bulletMesh = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.2, 0.2, 0.2),
+                    new THREE.MeshBasicMaterial({ color: 0xffffff })
+                );
+                bulletMesh.position.set(playerMesh.position.x, playerMesh.position.y + 0.5, 0);
+                scene.add(bulletMesh);
+                bullets.push(bulletMesh);
+                lastShotTime = currentTime;
+            }
+
+            // Move bullets
+            bullets.forEach(bullet => {
+                bullet.position.y += bulletSpeed;
+                if (bullet.position.y > 10) {
+                    scene.remove(bullet);
+                    bullets.splice(bullets.indexOf(bullet), 1);
+                }
+            });
+
+            // Check collisions between bullets and aliens
+            bullets.forEach(bullet => {
+                const bulletPos = bullet.position;
+                const aliens = [...alienGroup.children];
+                aliens.forEach(alien => {
+                    const alienWorldPos = new THREE.Vector3();
+                    alien.getWorldPosition(alienWorldPos);
+                    if (
+                        Math.abs(bulletPos.x - alienWorldPos.x) < 0.6 &&
+                        Math.abs(bulletPos.y - alienWorldPos.y) < 0.6
+                    ) {
+                        alienGroup.remove(alien);
+                        scene.remove(bullet);
+                        bullet.toRemove = true;
+                        score += 10;
+                        updateScoreDisplay();
+                    }
+                });
+            });
+            bullets = bullets.filter(b => !b.toRemove);
+
+            // Move aliens
+            alienGroup.position.x += alienVelocity.x;
+
+            // Reverse alien direction when hitting screen edges
+            if (alienVelocity.x > 0 && alienGroup.position.x + maxRx >= 9) {
+                alienGroup.position.y -= 0.5;
+                alienVelocity.x = -0.05;
+            } else if (alienVelocity.x < 0 && alienGroup.position.x + minRx <= -9) {
+                alienGroup.position.y -= 0.5;
+                alienVelocity.x = 0.05;
+            }
+
+            // Render the scene
+            renderer.render(scene, camera);
+            requestAnimationFrame(update);
+        }
+
+        // Start the game
+        updateScoreDisplay();
+        update();
+    </script>
+</body>
+</html>
