@@ -13,10 +13,27 @@
             font-size: 20px;
             z-index: 100;
         }
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 30px;
+            text-align: center;
+            display: none;
+            z-index: 100;
+        }
     </style>
 </head>
 <body>
     <div id="score">Score: 0</div>
+    <div id="gameOver">
+        <div id="gameOverText">GAME OVER</div>
+        <div id="finalScore">Score: 0</div>
+        <div>Press SPACE to play again</div>
+    </div>
     <script>
         // Set up the Three.js scene
         const scene = new THREE.Scene();
@@ -67,7 +84,10 @@
         window.addEventListener('keydown', (event) => {
             if (event.key === 'ArrowLeft') leftPressed = true;
             else if (event.key === 'ArrowRight') rightPressed = true;
-            else if (event.key === ' ') spacePressed = true;
+            else if (event.key === ' ') {
+                spacePressed = true;
+                if (!gameActive) resetGame();
+            }
         });
 
         window.addEventListener('keyup', (event) => {
@@ -88,13 +108,72 @@
         // Score tracking
         let score = 0;
         const scoreElement = document.getElementById('score');
+        const gameOverElement = document.getElementById('gameOver');
+        const gameOverTextElement = document.getElementById('gameOverText');
+        const finalScoreElement = document.getElementById('finalScore');
+        let gameActive = true;
         
         function updateScoreDisplay() {
             scoreElement.textContent = 'Score: ' + score;
         }
+        
+        function endGame(win) {
+            gameActive = false;
+            gameOverTextElement.textContent = win ? 'YOU WIN!' : 'GAME OVER';
+            finalScoreElement.textContent = 'Score: ' + score;
+            gameOverElement.style.display = 'block';
+        }
+        
+        function resetGame() {
+            // Reset score
+            score = 0;
+            updateScoreDisplay();
+            
+            // Reset player position
+            playerMesh.position.set(0, -9, 0);
+            
+            // Clear bullets
+            bullets.forEach(bullet => scene.remove(bullet));
+            bullets = [];
+            
+            // Reset aliens
+            while(alienGroup.children.length > 0) {
+                alienGroup.remove(alienGroup.children[0]);
+            }
+            
+            for (let row = 0; row < alienRows; row++) {
+                for (let col = 0; col < alienCols; col++) {
+                    const alienMesh = new THREE.Mesh(
+                        new THREE.BoxGeometry(1, 1, 1),
+                        new THREE.MeshBasicMaterial({ color: 0xff0000 })
+                    );
+                    alienMesh.position.set(
+                        (col - (alienCols - 1) / 2) * alienSpacing,
+                        row * alienSpacing,
+                        0
+                    );
+                    alienGroup.add(alienMesh);
+                }
+            }
+            alienGroup.position.set(0, 5, 0);
+            
+            // Reset alien velocity
+            alienVelocity = { x: 0.05, y: 0 };
+            
+            // Hide game over screen
+            gameOverElement.style.display = 'none';
+            
+            // Reactivate game
+            gameActive = true;
+            
+            // Restart game loop
+            update();
+        }
 
         // Game update loop
         function update() {
+            if (!gameActive) return;
+            
             const currentTime = Date.now();
 
             // Check if aliens reach the bottom
@@ -103,13 +182,13 @@
                 alien.getWorldPosition(alienWorldPos);
                 return alienWorldPos.y <= -9;
             })) {
-                scoreElement.textContent = 'Game Over! Final Score: ' + score;
+                endGame(false);
                 return;
             }
 
             // Check if all aliens are destroyed
             if (alienGroup.children.length === 0) {
-                scoreElement.textContent = 'You Win! Final Score: ' + score;
+                endGame(true);
                 return;
             }
 
