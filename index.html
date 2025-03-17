@@ -36,10 +36,15 @@
             text-align: center;
             z-index: 100;
             display: none;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px 0;
         }
         @media (max-width: 768px) {
             #mobileInstructions {
                 display: block;
+            }
+            #score {
+                font-size: 24px;
             }
         }
     </style>
@@ -293,6 +298,87 @@
             update();
         }
 
+        // Visual feedback for touch controls
+        function addTouchFeedback() {
+            if (!isMobile) return;
+            
+            // Create visual indicators for touch zones
+            const touchFeedback = document.createElement('div');
+            touchFeedback.id = 'touchFeedback';
+            touchFeedback.style.cssText = `
+                position: absolute;
+                bottom: 70px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 80%;
+                display: flex;
+                justify-content: space-between;
+                z-index: 90;
+            `;
+            
+            const leftZone = document.createElement('div');
+            leftZone.id = 'leftZone';
+            leftZone.style.cssText = `
+                width: 30px;
+                height: 30px;
+                border: 2px solid white;
+                border-radius: 50%;
+                opacity: 0.5;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            `;
+            leftZone.innerHTML = '←';
+            
+            const shootZone = document.createElement('div');
+            shootZone.id = 'shootZone';
+            shootZone.style.cssText = `
+                width: 30px;
+                height: 30px;
+                border: 2px solid white;
+                border-radius: 50%;
+                opacity: 0.5;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            `;
+            shootZone.innerHTML = '•';
+            
+            const rightZone = document.createElement('div');
+            rightZone.id = 'rightZone';
+            rightZone.style.cssText = `
+                width: 30px;
+                height: 30px;
+                border: 2px solid white;
+                border-radius: 50%;
+                opacity: 0.5;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            `;
+            rightZone.innerHTML = '→';
+            
+            touchFeedback.appendChild(leftZone);
+            touchFeedback.appendChild(shootZone);
+            touchFeedback.appendChild(rightZone);
+            document.body.appendChild(touchFeedback);
+        }
+        
+        // Update visual feedback based on touch
+        function updateTouchFeedback() {
+            if (!isMobile) return;
+            
+            const leftZone = document.getElementById('leftZone');
+            const shootZone = document.getElementById('shootZone');
+            const rightZone = document.getElementById('rightZone');
+            
+            if (leftZone && shootZone && rightZone) {
+                leftZone.style.backgroundColor = leftPressed ? 'rgba(255, 0, 0, 0.5)' : 'transparent';
+                shootZone.style.backgroundColor = spacePressed ? 'rgba(0, 255, 0, 0.5)' : 'transparent';
+                rightZone.style.backgroundColor = rightPressed ? 'rgba(0, 0, 255, 0.5)' : 'transparent';
+            }
+        }
+
         // Game update loop
         function update() {
             if (!gameActive) return;
@@ -335,6 +421,9 @@
                 bullets.push(bulletMesh);
                 lastShotTime = currentTime;
             }
+            
+            // Update touch feedback
+            updateTouchFeedback();
 
             // Move bullets
             bullets.forEach(bullet => {
@@ -398,6 +487,7 @@
 
         // Start the game
         updateScoreDisplay();
+        addTouchFeedback();
         update();
     </script>
 </body>
