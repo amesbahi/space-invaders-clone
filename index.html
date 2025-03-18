@@ -136,21 +136,57 @@
                     // Hide the start screen immediately - this is crucial for mobile devices
                     audioStart.style.display = 'none';
                     
-                    // For iOS devices, we need to resume the audio context first
-                    if (this.audioContext && this.audioContext.state === 'suspended') {
-                        this.audioContext.resume().then(() => {
-                            console.log("AudioContext resumed successfully");
+                    // iOS special handling - needs special approach
+                    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+                    
+                    if (isIOS) {
+                        console.log("iOS device detected, using special audio handling");
+                        
+                        // Create and play a silent sound first to unlock audio
+                        try {
+                            const silentSound = new Audio();
+                            silentSound.src = "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABQABgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYP/7kGQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEluZm8AAAAPAAAAAwAABHwAPj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj7/+5JkAA/wAABpAAAACAAADSAAAAEAAAGkAAAAIAAANIAAAARMQU1FMy45OS41VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/7kmRAj/AAAGkAAAAIAAANIAAAAQAAAaQAAAAgAAA0gAAABFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV";
+                            silentSound.load();
+                            silentSound.muted = false;
+                            silentSound.play().then(() => {
+                                console.log("Silent sound played successfully, audio unlocked");
+                                
+                                // Now try to resume the audio context
+                                if (this.audioContext) {
+                                    this.audioContext.resume().then(() => {
+                                        console.log("AudioContext resumed successfully");
+                                        this.playStartupSound();
+                                        this.startBackgroundMusic();
+                                    }).catch(e => {
+                                        console.log("AudioContext resume failed:", e);
+                                        this.startBackgroundMusic();
+                                    });
+                                } else {
+                                    this.startBackgroundMusic();
+                                }
+                            }).catch(error => {
+                                console.log("Silent sound failed, trying anyway:", error);
+                                this.startBackgroundMusic();
+                            });
+                        } catch (e) {
+                            console.log("iOS special handling failed:", e);
+                            this.startBackgroundMusic();
+                        }
+                    } else {
+                        // For non-iOS devices
+                        if (this.audioContext && this.audioContext.state === 'suspended') {
+                            this.audioContext.resume().then(() => {
+                                console.log("AudioContext resumed successfully");
+                                this.playStartupSound();
+                                this.startBackgroundMusic();
+                            }).catch(e => {
+                                console.log("AudioContext resume failed:", e);
+                                this.startBackgroundMusic();
+                            });
+                        } else {
                             this.playStartupSound();
                             this.startBackgroundMusic();
-                        }).catch(e => {
-                            console.log("AudioContext resume failed:", e);
-                            // Still try to play music even if resume fails
-                            this.startBackgroundMusic();
-                        });
-                    } else {
-                        // For other browsers
-                        this.playStartupSound();
-                        this.startBackgroundMusic();
+                        }
                     }
                 });
             },
@@ -184,6 +220,25 @@
             },
             
             startBackgroundMusic: function() {
+                // Check if this is iOS - needs special handling
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+                
+                if (isIOS) {
+                    console.log("iOS device detected for background music");
+                    
+                    // For iOS, we need to first make sure the audio context is resumed if possible
+                    if (this.audioContext && this.audioContext.state === 'suspended') {
+                        this.audioContext.resume().catch(e => {
+                            console.log("Could not resume audio context for background music:", e);
+                        });
+                    }
+                    
+                    // Use a simpler, more reliable approach for iOS
+                    this.playFallbackMusic();
+                    return;
+                }
+                
+                // For non-iOS devices, continue with the regular approach
                 // Load several music options to improve chances of playback
                 const musicOptions = [
                     'https://cdn.freesound.org/previews/368/368691_3235105-lq.mp3', // Original music
@@ -489,8 +544,18 @@
                 if (this.muted) return;
                 if (!this.sounds[sound]) return;
                 
+                // Special handling for iOS - need to check if audio is unlocked
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+                
                 // If audio context is suspended (common on iOS), try to resume it first
                 if (this.audioContext && this.audioContext.state === 'suspended') {
+                    if (isIOS) {
+                        // For iOS, we need a user interaction to unlock audio
+                        // We'll use the fallback beep method which uses oscillators
+                        this.playFallbackBeep();
+                        return;
+                    }
+                    
                     this.audioContext.resume().then(() => {
                         this.playSound(sound);
                     }).catch(e => {
@@ -548,21 +613,24 @@
             playFallbackBeep: function() {
                 if (this.muted) return;
                 
+                // Check if this is an iOS device - they need special handling
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+                
                 // Try to use AudioContext for better compatibility
                 if (this.audioContext) {
                     try {
-                        const oscillator = this.audioContext.createOscillator();
-                        const gainNode = this.audioContext.createGain();
-                        
-                        oscillator.type = 'square';
-                        oscillator.frequency.value = 880; // A5 note
-                        gainNode.gain.value = 0.3;
-                        
-                        oscillator.connect(gainNode);
-                        gainNode.connect(this.audioContext.destination);
-                        
-                        oscillator.start();
-                        oscillator.stop(this.audioContext.currentTime + 0.1); // Short beep
+                        // For iOS, resume the audio context first
+                        if (isIOS && this.audioContext.state === 'suspended') {
+                            this.audioContext.resume().then(() => {
+                                this.createOscillatorBeep();
+                            }).catch(e => {
+                                console.log("Could not resume audio context:", e);
+                                // Still try to play the beep
+                                this.createOscillatorBeep();
+                            });
+                        } else {
+                            this.createOscillatorBeep();
+                        }
                         return;
                     } catch (e) {
                         console.log("Oscillator fallback failed:", e);
@@ -573,10 +641,32 @@
                 try {
                     const beep = new Audio(this.shootBeep);
                     beep.volume = 0.5;
-                    beep.play();
+                    beep.play().catch(e => {
+                        console.log("All audio fallbacks failed:", e);
+                        this.showErrorMessage("Audio playback failed. Check your device settings.");
+                    });
                 } catch (e) {
-                    console.log("All audio fallbacks failed");
+                    console.log("All audio fallbacks failed:", e);
                     this.showErrorMessage("Audio playback failed. Check your device settings.");
+                }
+            },
+            
+            createOscillatorBeep: function() {
+                try {
+                    const oscillator = this.audioContext.createOscillator();
+                    const gainNode = this.audioContext.createGain();
+                    
+                    oscillator.type = 'square';
+                    oscillator.frequency.value = 880; // A5 note
+                    gainNode.gain.value = 0.3;
+                    
+                    oscillator.connect(gainNode);
+                    gainNode.connect(this.audioContext.destination);
+                    
+                    oscillator.start();
+                    oscillator.stop(this.audioContext.currentTime + 0.1); // Short beep
+                } catch (e) {
+                    console.log("Oscillator creation failed:", e);
                 }
             },
             
@@ -1148,15 +1238,12 @@
                 const phi = Math.random() * Math.PI;
                 const speed = Math.random() * 0.1 + 0.05;
                 
-                // Store velocity directly on position to avoid using userData
-                const velocity = new THREE.Vector3(
+                // Add to explosion and animate manually
+                particle.userData = { velocity: new THREE.Vector3(
                     Math.sin(phi) * Math.cos(theta) * speed,
                     Math.sin(phi) * Math.sin(theta) * speed,
                     Math.cos(phi) * speed
-                );
-                
-                // Add to explosion and animate manually
-                particle.userData = { velocity };
+                ) };
                 particles.add(particle);
             }
             
