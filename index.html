@@ -39,6 +39,16 @@
             background-color: rgba(0, 0, 0, 0.5);
             padding: 10px 0;
         }
+        #audioControls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 20px;
+            z-index: 100;
+            cursor: pointer;
+        }
         @media (max-width: 768px) {
             #mobileInstructions {
                 display: block;
@@ -58,8 +68,472 @@
         <div>Press SPACE or tap to play again</div>
     </div>
     <div id="mobileInstructions">Tap left side to move left | Tap right side to move right | Tap center to shoot</div>
+    <div id="audioControls">🔊</div>
+    
+    <div id="audioStart" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; font-family: Arial;">
+        <h2>Space Invaders</h2>
+        <p>Click the button below to enable sound</p>
+        <button style="padding: 15px 30px; background: #4CAF50; color: white; border: none; border-radius: 5px; font-size: 18px; cursor: pointer; margin-top: 20px;">START GAME WITH SOUND</button>
+    </div>
     
     <script>
+        // Audio system
+        const audio = {
+            sounds: {},
+            music: null,
+            muted: false,
+            audioContext: null,
+            
+            init: function() {
+                // Try to create AudioContext for more reliable sound
+                try {
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                } catch (e) {
+                    console.log("AudioContext not supported, falling back to Audio API");
+                }
+                
+                // Background music
+                this.music = new Audio();
+                this.music.src = 'https://cdn.freesound.org/previews/368/368691_3235105-lq.mp3';
+                this.music.loop = true;
+                this.music.volume = 0.4;
+                this.music.preload = 'auto';
+                
+                // Add a backup music URL in case the first one fails
+                this.backupMusic = 'https://cdn.freesound.org/previews/353/353546_5450487-lq.mp3';
+                
+                // Sound effects
+                this.sounds.shoot = new Audio('https://cdn.freesound.org/previews/404/404754_140737-lq.mp3');
+                this.sounds.explosion = new Audio('https://cdn.freesound.org/previews/156/156031_2703579-lq.mp3');
+                this.sounds.playerDeath = new Audio('https://cdn.freesound.org/previews/369/369515_6687660-lq.mp3');
+                this.sounds.victory = new Audio('https://cdn.freesound.org/previews/320/320775_5260872-lq.mp3');
+                
+                // Also load a simple beep for shoot fallback
+                this.shootBeep = 'data:audio/wav;base64,UklGRnQGAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YU8GAACA/4EA/oEA/IIA+4MA+YQA94UA9YYA84cA8YgA74kA7YoA6osA6IwA5o0A5I4A4o8A4JAA3pEA3JIAypkAyJoAxpsAxJwAw50Awp4AwZ8Av6AAvaEAvKIAuqMAuaQAt6UAtqYAtKcAs6gAsqkAsKoArqsArKwAq60Aqa4AqK8Ap7AApbEApLIAorMAmrwAlr8Ak8IArL4A08YA4MsA59AA6tMA7NYA7dkA7twA7N4A6+EA6uMA6OYA5+gA5esA4+0A4u8A4PIAzPsA1vEAw/8ARysAOTEALDUAIjgAGzwAFD8ADkIACEUAA0gA/koA+k0A9U8A8FIA61QA5lcA4VoA3FwA2F8A1WEA0WQAzWYAymkA08YA4MsA59AA6tMA7NYA7dkA7twA7N4A6+EA6uMA6OYA5+gA5esA4+0A4u8A4PIAzPsA1vEAw/8ARysAOTEALDUAIjgAGzwAFD8ADkIACEUAA0gA/koA+k0A9U8A8FIA61QA5lcA4VoA3FwA2F8A1WEA0WQAzWYAymkAxmwAwW4AvHEAuHMAtnQAs3YAsHgArXoAqnwAqH0Apn8ApIAA24wA1pMA0ZUAzJYAx5gAw5kAvpsAuZwAt54AsqAAraEAqaMApaQAoKYAnKcAmakAmKoAlKwAkK0AjK8Ah7AAg7IAgLMAfLUAeLYAc7gAQtIAP9QAPNYAO9gAOdoAONsANt0ANd8ANOAAMuIAMeMAL+UALuYALOgAK+kAKesAKOwADvcAMt8APrwATrkAWrYAZ7MAdLAAgK4AjasAlqgAoqYArqMAuaEAxJ4Az5wA2poA5ZgA8JUA+5MA34wA6IkA8oYA/YQA5YIA74AA+X4A5H8A1YMAwIcAqosAlI8Af5MAapcAVZsAQJ8AK6MArccA0cQA9sEAAr8AB74ADL0AELwAFbsAGboAHrkAI7gAKLcALLYAMbUANrQAO7MASMcATMYAUMUAVMQAWMMAW8IAX8EAY8AAZr8Aar4AbL0Aaryfe7v/cLr/Zbn/Wrj/T7f/RLb/Obf/Lrb/JLf/Gbf/D7j/CLn/ALr/+Lv/8rz/7L3/5r//ZdiA/4EA/oEA/IIA+4MA+YQA94UA9YYA84cA8YgA74kA7YoA6osA6IwA5o0A5I4A4o8A4JAA3pEA3JIAypkAyJoAxpsAxJwAw50Awp4AwZ8Av6AAvaEAvKIAuqMAuaQAt6UAtqYAtKcAs6gAsqkAsKoArqsArKwAq60Aqa4AqK8Ap7AApbEApLIAorMAmrwAlr8Ak8IArL4A08YA4MsA59AA6tMA7NYA7dkA7twA7N4A6+EA6uMA6OYA5+gA5esA4+0A4u8A4PIAzPsA1vEAw/8ARysAOTEALDUAIjgAGzwAFD8ADkIACEUAA0gA/koA+k0A9U8A8FIA61QA5lcA4VoA3FwA2F8A1WEA0WQAzWYAymkA08YA4MsA59AA6tMA7NYA7dkA7twA7N4A6+EA6uMA6OYA5+gA5esA4+0A4u8A4PIAzPsA1vEAw/8ARysAOTEALDUAIjgAGzwAFD8ADkIACEUAA0gA/koA+k0A9U8A8FIA61QA5lcA4VoA3FwA2F8A1WEA0WQAzWYAymkAxmwAwW4AvHEAuHMAtnQAs3YAsHgArXoAqnwAqH0Apn8ApIAA24wA1pMA0ZUAzJYAx5gAw5kAvpsAuZwAt54AsqAAraEAqaMApaQAoKYAnKcAmakAmKoAlKwAkK0AjK8Ah7AAg7IAgLMAfLUAeLYAc7gAQtIAP9QAPNYAO9gAOdoAONsANt0ANd8ANOAAMuIAMeMAL+UALuYALOgAK+kAKesAKOwADvcAMt8APrwATrkAWrYAZ7MAdLAAgK4AjasAlqgAoqYArqMAs6A=';
+                
+                // Set volumes
+                this.sounds.shoot.volume = 0.8; // Increased volume for shooting sound
+                this.sounds.explosion.volume = 0.7;
+                this.sounds.playerDeath.volume = 0.6;
+                this.sounds.victory.volume = 0.7;
+                
+                // Preload all sounds
+                const audioElements = [this.music, ...Object.values(this.sounds)];
+                audioElements.forEach(audio => audio.load());
+                
+                // Setup audio controls
+                const audioControls = document.getElementById('audioControls');
+                audioControls.addEventListener('click', () => {
+                    this.toggleMute();
+                    audioControls.textContent = this.muted ? '🔇' : '🔊';
+                });
+                
+                // Setup start button
+                const audioStart = document.getElementById('audioStart');
+                const startButton = audioStart.querySelector('button');
+                
+                startButton.addEventListener('click', () => {
+                    // Hide the start screen
+                    audioStart.style.display = 'none';
+                    
+                    // Play a startup sound instead of shoot sound
+                    if (this.audioContext) {
+                        // Use AudioContext to create a simple startup sound
+                        try {
+                            const oscillator = this.audioContext.createOscillator();
+                            const gainNode = this.audioContext.createGain();
+                            
+                            oscillator.type = 'sine';
+                            oscillator.frequency.setValueAtTime(440, this.audioContext.currentTime); // A4
+                            oscillator.frequency.exponentialRampToValueAtTime(880, this.audioContext.currentTime + 0.3); // A5
+                            
+                            gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
+                            gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.5);
+                            
+                            oscillator.connect(gainNode);
+                            gainNode.connect(this.audioContext.destination);
+                            
+                            oscillator.start();
+                            oscillator.stop(this.audioContext.currentTime + 0.5);
+                        } catch (e) {
+                            console.log("Startup sound failed:", e);
+                        }
+                    }
+                    
+                    // Load several music options to improve chances of playback
+                    const musicOptions = [
+                        'https://cdn.freesound.org/previews/368/368691_3235105-lq.mp3', // Original music
+                        'https://cdn.freesound.org/previews/353/353546_5450487-lq.mp3', // Backup 1
+                        'https://cdn.freesound.org/previews/415/415991_5356550-lq.mp3'  // Backup 2
+                    ];
+                    
+                    // Try loading each music file
+                    let musicLoaded = false;
+                    const tryMusic = (index) => {
+                        if (index >= musicOptions.length) {
+                            // If all options fail, use the fallback
+                            console.log("All music options failed, trying fallback");
+                            if (this.audioContext) {
+                                setTimeout(() => this.playFallbackMusic(), 500);
+                            }
+                            return;
+                        }
+                        
+                        this.music.src = musicOptions[index];
+                        this.music.load();
+                        this.music.oncanplaythrough = () => {
+                            if (!musicLoaded) {
+                                musicLoaded = true;
+                                console.log("Music loaded successfully:", this.music.src);
+                                
+                                // Start background music with a short delay
+                                setTimeout(() => {
+                                    this.playMusic();
+                                }, 500);
+                            }
+                        };
+                        
+                        this.music.onerror = () => {
+                            console.log("Music loading failed:", this.music.src);
+                            tryMusic(index + 1);
+                        };
+                    };
+                    
+                    // Start with the first option
+                    tryMusic(0);
+                });
+            },
+            
+            playMusic: function() {
+                if (this.muted) return;
+                
+                // Try to play, but don't worry if it fails due to autoplay policies
+                try {
+                    this.music.currentTime = 0;
+                    const playPromise = this.music.play();
+                    
+                    if (playPromise !== undefined) {
+                        playPromise.catch(e => {
+                            console.log("Music playback failed:", e);
+                            
+                            // Try with backup music URL if the first one fails
+                            if (this.music.src !== this.backupMusic) {
+                                console.log("Trying backup music URL...");
+                                this.music.src = this.backupMusic;
+                                this.music.load();
+                                setTimeout(() => this.playMusic(), 100);
+                            } else if (this.audioContext) {
+                                // Last resort - try using the AudioContext for music
+                                this.playFallbackMusic();
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.log("Music playback failed:", e);
+                    
+                    // Try with backup URL
+                    if (this.music.src !== this.backupMusic) {
+                        this.music.src = this.backupMusic;
+                        this.music.load();
+                        setTimeout(() => this.playMusic(), 100);
+                    } else if (this.audioContext) {
+                        this.playFallbackMusic();
+                    }
+                }
+            },
+            
+            playFallbackMusic: function() {
+                if (this.muted || !this.audioContext) return;
+                
+                // Create a space-age retro background music using oscillators
+                try {
+                    // Clear any existing interval and store audio nodes
+                    if (this.musicInterval) {
+                        clearInterval(this.musicInterval);
+                    }
+                    
+                    if (this.activeOscillators) {
+                        this.activeOscillators.forEach(osc => {
+                            try { osc.stop(); } catch(e) {}
+                        });
+                    }
+                    this.activeOscillators = [];
+                    
+                    // Create master volume control
+                    const masterGain = this.audioContext.createGain();
+                    masterGain.gain.value = 0.3; // Lower overall volume
+                    masterGain.connect(this.audioContext.destination);
+                    
+                    // Create reverb effect for spacey sound
+                    let convolverNode;
+                    try {
+                        convolverNode = this.audioContext.createConvolver();
+                        const attackTime = 0.01;
+                        const decayTime = 2.5;
+                        const sampleRate = this.audioContext.sampleRate;
+                        const bufferLength = sampleRate * decayTime;
+                        const buffer = this.audioContext.createBuffer(2, bufferLength, sampleRate);
+                        
+                        // Create simple impulse response for reverb
+                        for (let channelIndex = 0; channelIndex < 2; channelIndex++) {
+                            const channelData = buffer.getChannelData(channelIndex);
+                            for (let i = 0; i < bufferLength; i++) {
+                                // Exponential decay
+                                channelData[i] = (Math.random() * 2 - 1) * 
+                                                 Math.pow(1 - i / bufferLength, decayTime);
+                            }
+                        }
+                        
+                        convolverNode.buffer = buffer;
+                        convolverNode.connect(masterGain);
+                    } catch(e) {
+                        console.log("Reverb creation failed:", e);
+                        // Continue without reverb if it fails
+                    }
+                    
+                    // Create delay for echo effect
+                    let delayNode;
+                    try {
+                        delayNode = this.audioContext.createDelay();
+                        delayNode.delayTime.value = 0.35;
+                        
+                        // Create feedback for delay
+                        const feedbackGain = this.audioContext.createGain();
+                        feedbackGain.gain.value = 0.2;
+                        
+                        delayNode.connect(feedbackGain);
+                        feedbackGain.connect(delayNode);
+                        delayNode.connect(masterGain);
+                    } catch(e) {
+                        console.log("Delay creation failed:", e);
+                        // Continue without delay if it fails
+                    }
+                    
+                    // Basic arpeggiated retro space sequence player
+                    const playSpaceArpeggio = () => {
+                        // Space-age retro arpeggio sequence
+                        const arpeggioNotes = [
+                            // G minor scale notes in Hz - space-like
+                            196.00, // G3
+                            233.08, // A#3
+                            261.63, // C4
+                            311.13, // D#4
+                            349.23, // F4
+                            415.30, // G#4
+                            466.16  // A#4
+                        ];
+                        
+                        // Retro arpeggio pattern
+                        const sequence = [0, 3, 6, 3, 0, 2, 5, 2];
+                        let currentStep = 0;
+                        
+                        // Clean up previous interval
+                        if (this.arpeggioInterval) clearInterval(this.arpeggioInterval);
+                        
+                        // Create background drone
+                        try {
+                            const droneOsc = this.audioContext.createOscillator();
+                            const droneGain = this.audioContext.createGain();
+                            
+                            droneOsc.type = 'sine';
+                            droneOsc.frequency.value = 196.00/2; // Low G - one octave below
+                            droneGain.gain.value = 0.07; // Very subtle
+                            
+                            droneOsc.connect(droneGain);
+                            droneGain.connect(masterGain);
+                            if (convolverNode) droneGain.connect(convolverNode);
+                            
+                            droneOsc.start();
+                            this.activeOscillators.push(droneOsc);
+                            
+                            // Subtle pulsing for the drone
+                            const pulseLfo = this.audioContext.createOscillator();
+                            pulseLfo.type = 'sine';
+                            pulseLfo.frequency.value = 0.2; // Slow pulse
+                            
+                            const pulseGain = this.audioContext.createGain();
+                            pulseGain.gain.value = 0.05;
+                            
+                            pulseLfo.connect(pulseGain);
+                            pulseGain.connect(droneGain.gain);
+                            
+                            pulseLfo.start();
+                            this.activeOscillators.push(pulseLfo);
+                        } catch(e) {
+                            console.log("Drone creation failed:", e);
+                        }
+                        
+                        // Play the arpeggio sequence
+                        const playStep = () => {
+                            try {
+                                const osc = this.audioContext.createOscillator();
+                                const noteGain = this.audioContext.createGain();
+                                
+                                // Alternate between waveforms for more interesting texture
+                                osc.type = currentStep % 2 === 0 ? 'square' : 'sawtooth';
+                                
+                                // Get note from sequence
+                                const noteIndex = sequence[currentStep % sequence.length];
+                                osc.frequency.value = arpeggioNotes[noteIndex];
+                                
+                                // Create envelope
+                                noteGain.gain.setValueAtTime(0, this.audioContext.currentTime);
+                                noteGain.gain.linearRampToValueAtTime(0.15, this.audioContext.currentTime + 0.02);
+                                noteGain.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.2);
+                                
+                                // Connect through effects
+                                osc.connect(noteGain);
+                                noteGain.connect(masterGain);
+                                if (delayNode) noteGain.connect(delayNode);
+                                
+                                // Start and stop
+                                osc.start();
+                                osc.stop(this.audioContext.currentTime + 0.25);
+                                
+                                // Move to next step
+                                currentStep = (currentStep + 1) % sequence.length;
+                            } catch(e) {
+                                console.log("Arpeggio step failed:", e);
+                            }
+                        };
+                        
+                        // Play first note immediately
+                        playStep();
+                        
+                        // Set up interval for arpeggio (150ms = fast retro arpeggio speed)
+                        this.arpeggioInterval = setInterval(playStep, 150);
+                        
+                        // Every few seconds, add a random high-pitch sound effect
+                        const randomInterval = 2000 + Math.random() * 3000;
+                        setTimeout(() => {
+                            try {
+                                const sweepOsc = this.audioContext.createOscillator();
+                                const sweepGain = this.audioContext.createGain();
+                                
+                                sweepOsc.type = 'sine';
+                                sweepOsc.frequency.setValueAtTime(1200, this.audioContext.currentTime);
+                                sweepOsc.frequency.exponentialRampToValueAtTime(600, this.audioContext.currentTime + 0.7);
+                                
+                                sweepGain.gain.setValueAtTime(0, this.audioContext.currentTime);
+                                sweepGain.gain.linearRampToValueAtTime(0.07, this.audioContext.currentTime + 0.05);
+                                sweepGain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + 0.7);
+                                
+                                sweepOsc.connect(sweepGain);
+                                sweepGain.connect(masterGain);
+                                if (delayNode) sweepGain.connect(delayNode);
+                                if (convolverNode) sweepGain.connect(convolverNode);
+                                
+                                sweepOsc.start();
+                                sweepOsc.stop(this.audioContext.currentTime + 0.7);
+                            } catch(e) {
+                                console.log("Sweep effect failed:", e);
+                            }
+                        }, randomInterval);
+                    };
+                    
+                    // Start the space-age retro music
+                    playSpaceArpeggio();
+                    
+                    // Restart pattern every 10 seconds to keep it fresh
+                    this.musicInterval = setInterval(playSpaceArpeggio, 10000);
+                    
+                } catch (e) {
+                    console.log("Fallback music generation failed:", e);
+                }
+            },
+            
+            play: function(sound) {
+                if (this.muted) return;
+                if (!this.sounds[sound]) return;
+                
+                // For shooting sound, we need to ensure it plays immediately
+                if (sound === 'shoot') {
+                    let played = false;
+                    
+                    // Try the modern Audio approach first
+                    try {
+                        const shootSound = this.sounds.shoot.cloneNode(true);
+                        shootSound.currentTime = 0;
+                        shootSound.volume = 0.8;
+                        const playPromise = shootSound.play();
+                        
+                        if (playPromise !== undefined) {
+                            playPromise.then(() => {
+                                played = true;
+                            }).catch(e => {
+                                console.log("Primary shoot sound failed, trying fallback");
+                                this.playFallbackBeep();
+                            });
+                        }
+                    } catch (e) {
+                        console.log(`Shoot sound failed, trying fallback:`, e);
+                        this.playFallbackBeep();
+                    }
+                    return;
+                }
+                
+                // For other sounds
+                try {
+                    const soundClone = this.sounds[sound].cloneNode();
+                    soundClone.play();
+                } catch (e) {
+                    console.log(`Sound effect '${sound}' failed to play:`, e);
+                }
+            },
+            
+            playFallbackBeep: function() {
+                if (this.muted) return;
+                
+                // Try to use AudioContext for better compatibility
+                if (this.audioContext) {
+                    try {
+                        const oscillator = this.audioContext.createOscillator();
+                        const gainNode = this.audioContext.createGain();
+                        
+                        oscillator.type = 'square';
+                        oscillator.frequency.value = 880; // A5 note
+                        gainNode.gain.value = 0.3;
+                        
+                        oscillator.connect(gainNode);
+                        gainNode.connect(this.audioContext.destination);
+                        
+                        oscillator.start();
+                        oscillator.stop(this.audioContext.currentTime + 0.1); // Short beep
+                        return;
+                    } catch (e) {
+                        console.log("Oscillator fallback failed:", e);
+                    }
+                }
+                
+                // Last resort - try to play a data URI audio
+                try {
+                    const beep = new Audio(this.shootBeep);
+                    beep.volume = 0.5;
+                    beep.play();
+                } catch (e) {
+                    console.log("All audio fallbacks failed");
+                }
+            },
+            
+            toggleMute: function() {
+                this.muted = !this.muted;
+                
+                if (this.muted) {
+                    this.music.pause();
+                    
+                    // Stop all playing sound effects
+                    Object.values(this.sounds).forEach(sound => {
+                        if (!sound.paused) {
+                            sound.pause();
+                            sound.currentTime = 0;
+                        }
+                    });
+                } else {
+                    this.playMusic();
+                }
+            }
+        };
+        
         // Set up the Three.js scene
         const scene = new THREE.Scene();
         const camera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 100);
@@ -384,6 +858,36 @@
             gameOverTextElement.textContent = win ? 'YOU WIN!' : 'GAME OVER';
             finalScoreElement.textContent = 'Score: ' + score;
             gameOverElement.style.display = 'block';
+            
+            // Play win or lose sound
+            audio.play(win ? 'victory' : 'playerDeath');
+            
+            // Stop background music
+            if (audio.music && !audio.muted) {
+                audio.music.pause();
+                
+                // Also clear any fallback music intervals
+                if (audio.musicInterval) {
+                    clearInterval(audio.musicInterval);
+                    audio.musicInterval = null;
+                }
+                
+                if (audio.arpeggioInterval) {
+                    clearInterval(audio.arpeggioInterval);
+                    audio.arpeggioInterval = null;
+                }
+                
+                // Stop any active oscillators
+                if (audio.activeOscillators && audio.activeOscillators.length > 0) {
+                    audio.activeOscillators.forEach(osc => {
+                        try { 
+                            osc.stop();
+                            osc.disconnect();
+                        } catch(e) {}
+                    });
+                    audio.activeOscillators = [];
+                }
+            }
         }
         
         function resetGame() {
@@ -424,6 +928,18 @@
             
             // Reactivate game
             gameActive = true;
+            
+            // Restart background music with a more robust approach
+            if (!audio.muted) {
+                // Use a short delay to ensure the audio context is ready
+                setTimeout(() => {
+                    // Try to play music
+                    audio.playMusic();
+                    
+                    // Log music state for debugging
+                    console.log("Music restart attempted, muted:", audio.muted);
+                }, 100);
+            }
             
             // Restart game loop
             update();
@@ -515,6 +1031,9 @@
             const explosionGroup = new THREE.Group();
             explosionGroup.position.copy(position);
             scene.add(explosionGroup);
+            
+            // Play explosion sound
+            audio.play('explosion');
             
             // Create particle system for explosion
             const particleCount = 15;
@@ -668,6 +1187,9 @@
 
             // Shooting with enhanced visuals
             if (spacePressed && currentTime - lastShotTime > shotInterval) {
+                // Play shooting sound - call this first for immediate feedback
+                audio.play('shoot');
+                
                 // Create bullet with glowing effect
                 const bulletGeometry = new THREE.SphereGeometry(0.15, 8, 8);
                 const bulletMaterial = new THREE.MeshBasicMaterial({ 
@@ -832,6 +1354,7 @@
         // Start the game
         updateScoreDisplay();
         addTouchFeedback();
+        audio.init(); // Initialize audio system
         update();
     </script>
 </body>
