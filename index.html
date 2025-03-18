@@ -133,75 +133,98 @@
                 const startButton = audioStart.querySelector('button');
                 
                 startButton.addEventListener('click', () => {
-                    // Hide the start screen
+                    // Hide the start screen immediately - this is crucial for mobile devices
                     audioStart.style.display = 'none';
                     
-                    // Play a startup sound instead of shoot sound
-                    if (this.audioContext) {
-                        // Use AudioContext to create a simple startup sound
-                        try {
-                            const oscillator = this.audioContext.createOscillator();
-                            const gainNode = this.audioContext.createGain();
-                            
-                            oscillator.type = 'sine';
-                            oscillator.frequency.setValueAtTime(440, this.audioContext.currentTime); // A4
-                            oscillator.frequency.exponentialRampToValueAtTime(880, this.audioContext.currentTime + 0.3); // A5
-                            
-                            gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
-                            gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.5);
-                            
-                            oscillator.connect(gainNode);
-                            gainNode.connect(this.audioContext.destination);
-                            
-                            oscillator.start();
-                            oscillator.stop(this.audioContext.currentTime + 0.5);
-                        } catch (e) {
-                            console.log("Startup sound failed:", e);
+                    // For iOS devices, we need to resume the audio context first
+                    if (this.audioContext && this.audioContext.state === 'suspended') {
+                        this.audioContext.resume().then(() => {
+                            console.log("AudioContext resumed successfully");
+                            this.playStartupSound();
+                            this.startBackgroundMusic();
+                        }).catch(e => {
+                            console.log("AudioContext resume failed:", e);
+                            // Still try to play music even if resume fails
+                            this.startBackgroundMusic();
+                        });
+                    } else {
+                        // For other browsers
+                        this.playStartupSound();
+                        this.startBackgroundMusic();
+                    }
+                });
+            },
+            
+            playStartupSound: function() {
+                if (this.muted) return;
+                
+                // Play a startup sound
+                if (this.audioContext) {
+                    // Use AudioContext to create a simple startup sound
+                    try {
+                        const oscillator = this.audioContext.createOscillator();
+                        const gainNode = this.audioContext.createGain();
+                        
+                        oscillator.type = 'sine';
+                        oscillator.frequency.setValueAtTime(440, this.audioContext.currentTime); // A4
+                        oscillator.frequency.exponentialRampToValueAtTime(880, this.audioContext.currentTime + 0.3); // A5
+                        
+                        gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
+                        gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.5);
+                        
+                        oscillator.connect(gainNode);
+                        gainNode.connect(this.audioContext.destination);
+                        
+                        oscillator.start();
+                        oscillator.stop(this.audioContext.currentTime + 0.5);
+                    } catch (e) {
+                        console.log("Startup sound failed:", e);
+                    }
+                }
+            },
+            
+            startBackgroundMusic: function() {
+                // Load several music options to improve chances of playback
+                const musicOptions = [
+                    'https://cdn.freesound.org/previews/368/368691_3235105-lq.mp3', // Original music
+                    'https://cdn.freesound.org/previews/353/353546_5450487-lq.mp3', // Backup 1
+                    'https://cdn.freesound.org/previews/415/415991_5356550-lq.mp3'  // Backup 2
+                ];
+                
+                // Try loading each music file
+                let musicLoaded = false;
+                const tryMusic = (index) => {
+                    if (index >= musicOptions.length) {
+                        // If all options fail, use the fallback
+                        console.log("All music options failed, trying fallback");
+                        if (this.audioContext) {
+                            setTimeout(() => this.playFallbackMusic(), 500);
                         }
+                        return;
                     }
                     
-                    // Load several music options to improve chances of playback
-                    const musicOptions = [
-                        'https://cdn.freesound.org/previews/368/368691_3235105-lq.mp3', // Original music
-                        'https://cdn.freesound.org/previews/353/353546_5450487-lq.mp3', // Backup 1
-                        'https://cdn.freesound.org/previews/415/415991_5356550-lq.mp3'  // Backup 2
-                    ];
-                    
-                    // Try loading each music file
-                    let musicLoaded = false;
-                    const tryMusic = (index) => {
-                        if (index >= musicOptions.length) {
-                            // If all options fail, use the fallback
-                            console.log("All music options failed, trying fallback");
-                            if (this.audioContext) {
-                                setTimeout(() => this.playFallbackMusic(), 500);
-                            }
-                            return;
+                    this.music.src = musicOptions[index];
+                    this.music.load();
+                    this.music.oncanplaythrough = () => {
+                        if (!musicLoaded) {
+                            musicLoaded = true;
+                            console.log("Music loaded successfully:", this.music.src);
+                            
+                            // Start background music with a short delay
+                            setTimeout(() => {
+                                this.playMusic();
+                            }, 500);
                         }
-                        
-                        this.music.src = musicOptions[index];
-                        this.music.load();
-                        this.music.oncanplaythrough = () => {
-                            if (!musicLoaded) {
-                                musicLoaded = true;
-                                console.log("Music loaded successfully:", this.music.src);
-                                
-                                // Start background music with a short delay
-                                setTimeout(() => {
-                                    this.playMusic();
-                                }, 500);
-                            }
-                        };
-                        
-                        this.music.onerror = () => {
-                            console.log("Music loading failed:", this.music.src);
-                            tryMusic(index + 1);
-                        };
                     };
                     
-                    // Start with the first option
-                    tryMusic(0);
-                });
+                    this.music.onerror = () => {
+                        console.log("Music loading failed:", this.music.src);
+                        tryMusic(index + 1);
+                    };
+                };
+                
+                // Start with the first option
+                tryMusic(0);
             },
             
             playMusic: function() {
@@ -209,27 +232,25 @@
                 
                 // Try to play, but don't worry if it fails due to autoplay policies
                 try {
+                    // Reset audio position
                     this.music.currentTime = 0;
-                    const playPromise = this.music.play();
                     
-                    if (playPromise !== undefined) {
-                        playPromise.catch(e => {
-                            console.log("Music playback failed:", e);
-                            
-                            // Try with backup music URL if the first one fails
-                            if (this.music.src !== this.backupMusic) {
-                                console.log("Trying backup music URL...");
-                                this.music.src = this.backupMusic;
-                                this.music.load();
-                                setTimeout(() => this.playMusic(), 100);
-                            } else if (this.audioContext) {
-                                // Last resort - try using the AudioContext for music
-                                this.playFallbackMusic();
-                            }
+                    // For iOS, make sure the audio context is resumed before playing
+                    if (this.audioContext && this.audioContext.state === 'suspended') {
+                        this.audioContext.resume().then(() => {
+                            // Only after context is resumed, we try to play
+                            this.actuallyPlayMusic();
+                        }).catch(err => {
+                            console.log("Failed to resume audio context:", err);
+                            // Try to play anyway, it might work on some devices
+                            this.actuallyPlayMusic();
                         });
+                    } else {
+                        // For other browsers, play directly
+                        this.actuallyPlayMusic();
                     }
                 } catch (e) {
-                    console.log("Music playback failed:", e);
+                    console.log("Music setup failed:", e);
                     
                     // Try with backup URL
                     if (this.music.src !== this.backupMusic) {
@@ -239,6 +260,27 @@
                     } else if (this.audioContext) {
                         this.playFallbackMusic();
                     }
+                }
+            },
+            
+            actuallyPlayMusic: function() {
+                const playPromise = this.music.play();
+                
+                if (playPromise !== undefined) {
+                    playPromise.catch(e => {
+                        console.log("Music playback failed:", e);
+                        
+                        // Try with backup music URL if the first one fails
+                        if (this.music.src !== this.backupMusic) {
+                            console.log("Trying backup music URL...");
+                            this.music.src = this.backupMusic;
+                            this.music.load();
+                            setTimeout(() => this.playMusic(), 100);
+                        } else if (this.audioContext) {
+                            // Last resort - try using the AudioContext for music
+                            this.playFallbackMusic();
+                        }
+                    });
                 }
             },
             
@@ -439,6 +481,7 @@
                     
                 } catch (e) {
                     console.log("Fallback music generation failed:", e);
+                    this.showErrorMessage("Background music couldn't be played. Some features may be limited.");
                 }
             },
             
@@ -446,6 +489,21 @@
                 if (this.muted) return;
                 if (!this.sounds[sound]) return;
                 
+                // If audio context is suspended (common on iOS), try to resume it first
+                if (this.audioContext && this.audioContext.state === 'suspended') {
+                    this.audioContext.resume().then(() => {
+                        this.playSound(sound);
+                    }).catch(e => {
+                        console.log("AudioContext resume failed:", e);
+                        // Still try to play the sound anyway
+                        this.playSound(sound);
+                    });
+                } else {
+                    this.playSound(sound);
+                }
+            },
+            
+            playSound: function(sound) {
                 // For shooting sound, we need to ensure it plays immediately
                 if (sound === 'shoot') {
                     let played = false;
@@ -475,7 +533,13 @@
                 // For other sounds
                 try {
                     const soundClone = this.sounds[sound].cloneNode();
-                    soundClone.play();
+                    const playPromise = soundClone.play();
+                    
+                    if (playPromise !== undefined) {
+                        playPromise.catch(e => {
+                            console.log(`Sound effect '${sound}' failed to play:`, e);
+                        });
+                    }
                 } catch (e) {
                     console.log(`Sound effect '${sound}' failed to play:`, e);
                 }
@@ -512,7 +576,38 @@
                     beep.play();
                 } catch (e) {
                     console.log("All audio fallbacks failed");
+                    this.showErrorMessage("Audio playback failed. Check your device settings.");
                 }
+            },
+            
+            showErrorMessage: function(message) {
+                // Check if an error message already exists
+                let errorMsg = document.getElementById('audio-error');
+                
+                if (!errorMsg) {
+                    // Create a new error message element
+                    errorMsg = document.createElement('div');
+                    errorMsg.id = 'audio-error';
+                    errorMsg.style.position = 'fixed';
+                    errorMsg.style.bottom = '20px';
+                    errorMsg.style.left = '0';
+                    errorMsg.style.width = '100%';
+                    errorMsg.style.backgroundColor = 'rgba(255, 0, 0, 0.7)';
+                    errorMsg.style.color = 'white';
+                    errorMsg.style.padding = '10px';
+                    errorMsg.style.textAlign = 'center';
+                    errorMsg.style.zIndex = '2000';
+                    errorMsg.style.fontFamily = 'Arial, sans-serif';
+                    document.body.appendChild(errorMsg);
+                }
+                
+                // Set the message content
+                errorMsg.textContent = message;
+                
+                // Hide after 5 seconds
+                setTimeout(function() {
+                    errorMsg.style.display = 'none';
+                }, 5000);
             },
             
             toggleMute: function() {
