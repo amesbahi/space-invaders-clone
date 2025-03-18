@@ -64,41 +64,178 @@
         const scene = new THREE.Scene();
         const camera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 100);
         camera.position.z = 5;
-        const renderer = new THREE.WebGLRenderer();
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0x000022); // Set dark blue background
         document.body.appendChild(renderer.domElement);
 
-        // Create starfield background
+        // Create starfield background with improved visuals
         const starsGeometry = new THREE.BufferGeometry();
         const starsMaterial = new THREE.PointsMaterial({
             color: 0xFFFFFF,
-            size: 0.05,
-            sizeAttenuation: false
+            size: 0.08,
+            sizeAttenuation: true,
+            transparent: true,
+            blending: THREE.AdditiveBlending
         });
 
         const starsVertices = [];
-        for(let i = 0; i < 1000; i++) {
+        const starSizes = [];
+        const starColors = [0xFFFFFF, 0x8888FF, 0xFFFF88]; // White, blue and yellow stars
+        
+        for(let i = 0; i < 1500; i++) {
             const x = Math.random() * 40 - 20;
             const y = Math.random() * 40 - 20;
-            const z = -10;
+            const z = -(Math.random() * 10) - 5; // Varied depth for parallax effect
             starsVertices.push(x, y, z);
+            
+            // Random star size for variety
+            const size = Math.random() * 0.08 + 0.02;
+            starSizes.push(size);
         }
 
         starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starsVertices, 3));
+        starsGeometry.setAttribute('size', new THREE.Float32BufferAttribute(starSizes, 1));
         const starField = new THREE.Points(starsGeometry, starsMaterial);
         scene.add(starField);
+        
+        // Simplified nebula background - using a color instead of texture to avoid loading issues
+        const nebulaGeometry = new THREE.PlaneGeometry(40, 40);
+        const nebulaMaterial = new THREE.MeshBasicMaterial({
+            color: 0x0000aa,
+            transparent: true,
+            opacity: 0.1,
+            side: THREE.DoubleSide
+        });
+        const nebula = new THREE.Mesh(nebulaGeometry, nebulaMaterial);
+        nebula.position.z = -15;
+        scene.add(nebula);
 
-        // Create the player's spaceship
-        const playerMesh = new THREE.Mesh(
-            new THREE.BoxGeometry(1, 1, 1),
-            new THREE.MeshBasicMaterial({ color: 0x00ff00 })
-        );
+        // Create the player's spaceship with better model
+        const createPlayerShip = () => {
+            const shipGroup = new THREE.Group();
+            
+            // Ship body
+            const bodyGeometry = new THREE.ConeGeometry(0.5, 1, 4);
+            bodyGeometry.rotateX(Math.PI);
+            const bodyMaterial = new THREE.MeshBasicMaterial({ color: 0x22ff44 });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            shipGroup.add(body);
+            
+            // Ship wings
+            const wingGeometry = new THREE.BoxGeometry(1.2, 0.2, 0.1);
+            const wingMaterial = new THREE.MeshBasicMaterial({ color: 0x118833 });
+            const wings = new THREE.Mesh(wingGeometry, wingMaterial);
+            wings.position.y = -0.3;
+            shipGroup.add(wings);
+            
+            // Ship cockpit
+            const cockpitGeometry = new THREE.SphereGeometry(0.2, 8, 8);
+            const cockpitMaterial = new THREE.MeshBasicMaterial({ color: 0x88ffaa });
+            const cockpit = new THREE.Mesh(cockpitGeometry, cockpitMaterial);
+            cockpit.position.y = -0.1;
+            cockpit.position.z = 0.2;
+            shipGroup.add(cockpit);
+            
+            // Engine glow effect
+            const engineGlowGeometry = new THREE.CircleGeometry(0.2, 8);
+            const engineGlowMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0x44aaff, 
+                transparent: true,
+                opacity: 0.7,
+                side: THREE.DoubleSide
+            });
+            const engineGlow = new THREE.Mesh(engineGlowGeometry, engineGlowMaterial);
+            engineGlow.position.y = 0.5;
+            engineGlow.rotation.x = Math.PI / 2;
+            shipGroup.add(engineGlow);
+            
+            // Add blinking engine animation
+            shipGroup.userData.pulseAnimation = () => {
+                engineGlow.material.opacity = 0.4 + Math.sin(Date.now() * 0.01) * 0.3;
+            };
+            
+            return shipGroup;
+        };
+        
+        const playerMesh = createPlayerShip();
         playerMesh.position.set(0, -9, 0);
         scene.add(playerMesh);
 
+        // Create the alien models with better visuals
+        const createAlien = (color, row) => {
+            const alienGroup = new THREE.Group();
+            
+            // Choose different alien types based on row
+            let alienBody, alienEyes;
+            
+            if (row === 0) { // Top row - "squid" aliens
+                const bodyGeometry = new THREE.ConeGeometry(0.5, 0.8, 5);
+                bodyGeometry.rotateX(Math.PI);
+                const bodyMaterial = new THREE.MeshBasicMaterial({ color: 0xff44ff });
+                alienBody = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                
+                // Add tentacles
+                for (let i = 0; i < 3; i++) {
+                    const tentacleGeometry = new THREE.BoxGeometry(0.1, 0.4, 0.1);
+                    const tentacle = new THREE.Mesh(tentacleGeometry, bodyMaterial);
+                    tentacle.position.x = (i - 1) * 0.2;
+                    tentacle.position.y = -0.4;
+                    alienBody.add(tentacle);
+                }
+            }
+            else if (row === 1) { // Middle row - "crab" aliens
+                const bodyGeometry = new THREE.SphereGeometry(0.4, 8, 8);
+                bodyGeometry.scale(1.2, 0.8, 1);
+                const bodyMaterial = new THREE.MeshBasicMaterial({ color: 0x44ff88 });
+                alienBody = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                
+                // Add claws
+                for (let side = -1; side <= 1; side += 2) {
+                    const clawGeometry = new THREE.BoxGeometry(0.5, 0.15, 0.15);
+                    const claw = new THREE.Mesh(clawGeometry, bodyMaterial);
+                    claw.position.x = side * 0.5;
+                    alienBody.add(claw);
+                }
+            }
+            else { // Bottom row - "octopus" aliens
+                const bodyGeometry = new THREE.SphereGeometry(0.5, 8, 8);
+                const bodyMaterial = new THREE.MeshBasicMaterial({ color: 0xff5500 });
+                alienBody = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            }
+            
+            alienGroup.add(alienBody);
+            
+            // Add eyes to all aliens
+            const eyeGeometry = new THREE.SphereGeometry(0.1, 6, 6);
+            const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            
+            for (let side = -1; side <= 1; side += 2) {
+                const eye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+                eye.position.set(side * 0.2, 0.1, 0.3);
+                eye.scale.set(1, 0.8, 1);
+                alienGroup.add(eye);
+                
+                // Add pupils
+                const pupilGeometry = new THREE.SphereGeometry(0.05, 4, 4);
+                const pupilMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+                const pupil = new THREE.Mesh(pupilGeometry, pupilMaterial);
+                pupil.position.z = 0.07;
+                eye.add(pupil);
+            }
+            
+            // Add pulsing animation
+            alienGroup.userData.pulseAnimation = () => {
+                alienGroup.scale.x = 1 + Math.sin(Date.now() * 0.005) * 0.1;
+                alienGroup.scale.y = 1 + Math.sin(Date.now() * 0.005 + 1) * 0.1;
+            };
+            
+            return alienGroup;
+        };
+
         // Create the group of aliens
         const alienGroup = new THREE.Group();
-        const alienSpacing = 1.5;
+        const alienSpacing = 1.8;
         const alienRows = 3;
         const alienCols = 5;
         const maxRx = ((alienCols - 1) / 2) * alienSpacing; // Rightmost alien offset
@@ -106,10 +243,7 @@
 
         for (let row = 0; row < alienRows; row++) {
             for (let col = 0; col < alienCols; col++) {
-                const alienMesh = new THREE.Mesh(
-                    new THREE.BoxGeometry(1, 1, 1),
-                    new THREE.MeshBasicMaterial({ color: 0xff0000 })
-                );
+                const alienMesh = createAlien(0xff0000, row);
                 alienMesh.position.set(
                     (col - (alienCols - 1) / 2) * alienSpacing,
                     row * alienSpacing,
@@ -224,10 +358,10 @@
         document.addEventListener('touchend', handleTouchEnd, { passive: false });
         document.addEventListener('touchcancel', handleTouchEnd, { passive: false });
 
-        // Manage bullets
+        // Manage bullets with enhanced visuals
         let bullets = [];
-        const bulletSpeed = 0.1;
-        const shotInterval = 500; // milliseconds
+        const bulletSpeed = 0.15;
+        const shotInterval = 400; // milliseconds
         let lastShotTime = 0;
 
         // Alien movement
@@ -271,10 +405,7 @@
             
             for (let row = 0; row < alienRows; row++) {
                 for (let col = 0; col < alienCols; col++) {
-                    const alienMesh = new THREE.Mesh(
-                        new THREE.BoxGeometry(1, 1, 1),
-                        new THREE.MeshBasicMaterial({ color: 0xff0000 })
-                    );
+                    const alienMesh = createAlien(0xff0000, row);
                     alienMesh.position.set(
                         (col - (alienCols - 1) / 2) * alienSpacing,
                         row * alienSpacing,
@@ -379,14 +510,139 @@
             }
         }
 
+        // Create explosion effect
+        function createExplosion(position) {
+            const explosionGroup = new THREE.Group();
+            explosionGroup.position.copy(position);
+            scene.add(explosionGroup);
+            
+            // Create particle system for explosion
+            const particleCount = 15;
+            const particles = new THREE.Group();
+            
+            for (let i = 0; i < particleCount; i++) {
+                const particleGeometry = new THREE.SphereGeometry(0.1, 4, 4);
+                const particleMaterial = new THREE.MeshBasicMaterial({ 
+                    color: new THREE.Color().setHSL(Math.random() * 0.1 + 0.05, 1, 0.5), // Orange to yellow
+                    transparent: true,
+                    opacity: 0.8
+                });
+                const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+                
+                // Random direction
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.random() * Math.PI;
+                const speed = Math.random() * 0.1 + 0.05;
+                
+                // Store velocity directly on position to avoid using userData
+                const velocity = new THREE.Vector3(
+                    Math.sin(phi) * Math.cos(theta) * speed,
+                    Math.sin(phi) * Math.sin(theta) * speed,
+                    Math.cos(phi) * speed
+                );
+                
+                // Add to explosion and animate manually
+                particle.userData = { velocity };
+                particles.add(particle);
+            }
+            
+            explosionGroup.add(particles);
+            
+            // Create expanding ring effect
+            const ringGeometry = new THREE.RingGeometry(0.1, 0.2, 16);
+            const ringMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0xffaa00, 
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.7,
+            });
+            const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+            ring.rotation.x = Math.PI / 2;
+            explosionGroup.add(ring);
+            
+            // Store start time for manual animation
+            const startTime = Date.now();
+            const duration = 600;
+            
+            // Animation function without using TWEEN
+            explosionGroup.userData.animate = () => {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                
+                // Animate particles
+                particles.children.forEach(particle => {
+                    const vel = particle.userData.velocity;
+                    particle.position.x += vel.x * 0.05;
+                    particle.position.y += vel.y * 0.05;
+                    particle.position.z += vel.z * 0.05;
+                    particle.material.opacity = 0.8 * (1 - progress);
+                });
+                
+                // Animate ring
+                const scale = 1 + 4 * progress;
+                ring.scale.set(scale, scale, scale);
+                ring.material.opacity = 0.7 * (1 - progress);
+                
+                // Remove when animation is complete
+                if (progress >= 1) {
+                    scene.remove(explosionGroup);
+                    return false;
+                }
+                return true;
+            };
+            
+            // Add to a list of active explosions
+            activeExplosions.push(explosionGroup);
+        }
+
+        // Track active explosions for manual animation
+        let activeExplosions = [];
+
         // Game update loop
         function update() {
             if (!gameActive) return;
             
             const currentTime = Date.now();
+            
+            // Animate stars with parallax effect
+            const positions = starField.geometry.attributes.position.array;
+            const sizes = starField.geometry.attributes.size.array;
+            
+            for (let i = 0; i < positions.length; i += 3) {
+                // Slightly move stars at different speeds based on their z-position
+                positions[i + 1] -= (0.002 / (positions[i + 2] * -0.5)); // Move stars based on depth
+                
+                // Reset stars that go out of view
+                if (positions[i + 1] < -15) {
+                    positions[i + 1] = 15;
+                }
+                
+                // Make stars twinkle by varying their size
+                const index = i / 3;
+                const originalSize = starSizes[index];
+                sizes[index] = originalSize * (0.8 + Math.sin(currentTime * 0.001 + index) * 0.2);
+            }
+            
+            starField.geometry.attributes.position.needsUpdate = true;
+            starField.geometry.attributes.size.needsUpdate = true;
+            
+            // Rotate nebula slowly
+            nebula.rotation.z += 0.0005;
 
-            // Animate stars
-            starField.rotation.z += 0.0001;
+            // Animate player ship's engine glow
+            playerMesh.userData.pulseAnimation();
+            
+            // Animate aliens
+            alienGroup.children.forEach(alien => {
+                if (alien.userData.pulseAnimation) {
+                    alien.userData.pulseAnimation();
+                }
+            });
+
+            // Animate active explosions and remove completed ones
+            activeExplosions = activeExplosions.filter(explosion => {
+                return explosion.userData.animate();
+            });
 
             // Check if aliens reach the bottom
             if (alienGroup.children.some(alien => {
@@ -410,24 +666,109 @@
             if (rightPressed) playerMesh.position.x += playerSpeed;
             playerMesh.position.x = Math.max(-8.5, Math.min(8.5, playerMesh.position.x));
 
-            // Shooting
+            // Shooting with enhanced visuals
             if (spacePressed && currentTime - lastShotTime > shotInterval) {
-                const bulletMesh = new THREE.Mesh(
-                    new THREE.BoxGeometry(0.2, 0.2, 0.2),
-                    new THREE.MeshBasicMaterial({ color: 0xffffff })
-                );
+                // Create bullet with glowing effect
+                const bulletGeometry = new THREE.SphereGeometry(0.15, 8, 8);
+                const bulletMaterial = new THREE.MeshBasicMaterial({ 
+                    color: 0x88ffff,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                const bulletMesh = new THREE.Mesh(bulletGeometry, bulletMaterial);
+                
+                // Add glow effect
+                const glowGeometry = new THREE.SphereGeometry(0.25, 8, 8);
+                const glowMaterial = new THREE.MeshBasicMaterial({
+                    color: 0x00ffff,
+                    transparent: true,
+                    opacity: 0.4,
+                    blending: THREE.AdditiveBlending
+                });
+                const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+                bulletMesh.add(glow);
+                
+                // Position the bullet at the tip of the player's ship
                 bulletMesh.position.set(playerMesh.position.x, playerMesh.position.y + 0.5, 0);
                 scene.add(bulletMesh);
                 bullets.push(bulletMesh);
                 lastShotTime = currentTime;
+                
+                // Add muzzle flash effect
+                const flashGeometry = new THREE.CircleGeometry(0.3, 8);
+                const flashMaterial = new THREE.MeshBasicMaterial({
+                    color: 0xaaffff,
+                    transparent: true,
+                    opacity: 0.8,
+                    side: THREE.DoubleSide
+                });
+                const flash = new THREE.Mesh(flashGeometry, flashMaterial);
+                flash.position.set(playerMesh.position.x, playerMesh.position.y + 0.7, 0);
+                flash.rotation.x = Math.PI / 2;
+                scene.add(flash);
+                
+                // Animate flash without TWEEN
+                const flashStartTime = Date.now();
+                const flashDuration = 100;
+                
+                const animateFlash = () => {
+                    const elapsed = Date.now() - flashStartTime;
+                    const progress = Math.min(elapsed / flashDuration, 1);
+                    
+                    if (progress < 1) {
+                        const scale = 1 + progress;
+                        flash.scale.set(scale, scale, scale);
+                        flash.material.opacity = 0.8 * (1 - progress);
+                        requestAnimationFrame(animateFlash);
+                    } else {
+                        scene.remove(flash);
+                    }
+                };
+                
+                animateFlash();
             }
             
             // Update touch feedback
             updateTouchFeedback();
 
-            // Move bullets
+            // Move bullets with trail effect
             bullets.forEach(bullet => {
                 bullet.position.y += bulletSpeed;
+                
+                // Add trail effect
+                if (Math.random() > 0.5) {
+                    const trailGeometry = new THREE.SphereGeometry(0.08, 4, 4);
+                    const trailMaterial = new THREE.MeshBasicMaterial({
+                        color: 0x66ffff,
+                        transparent: true,
+                        opacity: 0.5
+                    });
+                    const trail = new THREE.Mesh(trailGeometry, trailMaterial);
+                    trail.position.copy(bullet.position);
+                    trail.position.y -= 0.1;
+                    scene.add(trail);
+                    
+                    // Animate trail without TWEEN
+                    const trailStartTime = Date.now();
+                    const trailDuration = 200;
+                    
+                    const animateTrail = () => {
+                        const elapsed = Date.now() - trailStartTime;
+                        const progress = Math.min(elapsed / trailDuration, 1);
+                        
+                        if (progress < 1) {
+                            const scale = 1 - 0.5 * progress;
+                            trail.scale.set(scale, scale, scale);
+                            trail.material.opacity = 0.5 * (1 - progress);
+                            requestAnimationFrame(animateTrail);
+                        } else {
+                            scene.remove(trail);
+                        }
+                    };
+                    
+                    animateTrail();
+                }
+                
                 if (bullet.position.y > 10) {
                     scene.remove(bullet);
                     bullets.splice(bullets.indexOf(bullet), 1);
@@ -442,14 +783,17 @@
                     const alienWorldPos = new THREE.Vector3();
                     alien.getWorldPosition(alienWorldPos);
                     if (
-                        Math.abs(bulletPos.x - alienWorldPos.x) < 0.6 &&
-                        Math.abs(bulletPos.y - alienWorldPos.y) < 0.6
+                        Math.abs(bulletPos.x - alienWorldPos.x) < 0.8 &&
+                        Math.abs(bulletPos.y - alienWorldPos.y) < 0.8
                     ) {
                         alienGroup.remove(alien);
                         scene.remove(bullet);
                         bullet.toRemove = true;
                         score += 10;
                         updateScoreDisplay();
+                        
+                        // Create explosion at alien position
+                        createExplosion(alienWorldPos);
                     }
                 });
             });
