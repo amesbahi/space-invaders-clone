@@ -70,12 +70,6 @@
     <div id="mobileInstructions">Tap left side to move left | Tap right side to move right | Tap center to shoot</div>
     <div id="audioControls">🔊</div>
     
-    <div id="audioStart" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; font-family: Arial;">
-        <h2>Space Invaders</h2>
-        <p>Click the button below to enable sound</p>
-        <button style="padding: 15px 30px; background: #4CAF50; color: white; border: none; border-radius: 5px; font-size: 18px; cursor: pointer; margin-top: 20px;">START GAME WITH SOUND</button>
-    </div>
-    
     <script>
         // Audio system
         const audio = {
@@ -88,11 +82,34 @@
                 // Try to create AudioContext for more reliable sound
                 try {
                     this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    
+                    // Unlock audio context on iOS and Safari
+                    if (this.audioContext.state === 'suspended') {
+                        const unlockAudio = () => {
+                            this.audioContext.resume();
+                        };
+                        document.body.addEventListener('touchstart', unlockAudio, false);
+                        document.body.addEventListener('click', unlockAudio, false);
+                    }
                 } catch (e) {
-                    console.log("AudioContext not supported, falling back to Audio API");
+                    console.log("AudioContext not supported, audio may not work:", e);
                 }
                 
-                // Background music
+                // Create a silent oscillator and start it immediately
+                // This helps unlock the audio context on some browsers
+                try {
+                    const silentOscillator = this.audioContext.createOscillator();
+                    const silentGain = this.audioContext.createGain();
+                    silentGain.gain.value = 0.001; // Almost silent
+                    silentOscillator.connect(silentGain);
+                    silentGain.connect(this.audioContext.destination);
+                    silentOscillator.start();
+                    silentOscillator.stop(this.audioContext.currentTime + 0.5);
+                } catch (e) {
+                    console.log("Failed to create silent oscillator:", e);
+                }
+                
+                // Background music using HTML5 Audio
                 this.music = new Audio();
                 this.music.src = 'https://cdn.freesound.org/previews/368/368691_3235105-lq.mp3';
                 this.music.loop = true;
@@ -108,11 +125,8 @@
                 this.sounds.playerDeath = new Audio('https://cdn.freesound.org/previews/369/369515_6687660-lq.mp3');
                 this.sounds.victory = new Audio('https://cdn.freesound.org/previews/320/320775_5260872-lq.mp3');
                 
-                // Also load a simple beep for shoot fallback
-                this.shootBeep = 'data:audio/wav;base64,UklGRnQGAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YU8GAACA/4EA/oEA/IIA+4MA+YQA94UA9YYA84cA8YgA74kA7YoA6osA6IwA5o0A5I4A4o8A4JAA3pEA3JIAypkAyJoAxpsAxJwAw50Awp4AwZ8Av6AAvaEAvKIAuqMAuaQAt6UAtqYAtKcAs6gAsqkAsKoArqsArKwAq60Aqa4AqK8Ap7AApbEApLIAorMAmrwAlr8Ak8IArL4A08YA4MsA59AA6tMA7NYA7dkA7twA7N4A6+EA6uMA6OYA5+gA5esA4+0A4u8A4PIAzPsA1vEAw/8ARysAOTEALDUAIjgAGzwAFD8ADkIACEUAA0gA/koA+k0A9U8A8FIA61QA5lcA4VoA3FwA2F8A1WEA0WQAzWYAymkA08YA4MsA59AA6tMA7NYA7dkA7twA7N4A6+EA6uMA6OYA5+gA5esA4+0A4u8A4PIAzPsA1vEAw/8ARysAOTEALDUAIjgAGzwAFD8ADkIACEUAA0gA/koA+k0A9U8A8FIA61QA5lcA4VoA3FwA2F8A1WEA0WQAzWYAymkAxmwAwW4AvHEAuHMAtnQAs3YAsHgArXoAqnwAqH0Apn8ApIAA24wA1pMA0ZUAzJYAx5gAw5kAvpsAuZwAt54AsqAAraEAqaMApaQAoKYAnKcAmakAmKoAlKwAkK0AjK8Ah7AAg7IAgLMAfLUAeLYAc7gAQtIAP9QAPNYAO9gAOdoAONsANt0ANd8ANOAAMuIAMeMAL+UALuYALOgAK+kAKesAKOwADvcAMt8APrwATrkAWrYAZ7MAdLAAgK4AjasAlqgAoqYArqMAuaEAxJ4Az5wA2poA5ZgA8JUA+5MA34wA6IkA8oYA/YQA5YIA74AA+X4A5H8A1YMAwIcAqosAlI8Af5MAapcAVZsAQJ8AK6MArccA0cQA9sEAAr8AB74ADL0AELwAFbsAGboAHrkAI7gAKLcALLYAMbUANrQAO7MASMcATMYAUMUAVMQAWMMAW8IAX8EAY8AAZr8Aar4AbL0Aaryfe7v/cLr/Zbn/Wrj/T7f/RLb/Obf/Lrb/JLf/Gbf/D7j/CLn/ALr/+Lv/8rz/7L3/5r//ZdiA/4EA/oEA/IIA+4MA+YQA94UA9YYA84cA8YgA74kA7YoA6osA6IwA5o0A5I4A4o8A4JAA3pEA3JIAypkAyJoAxpsAxJwAw50Awp4AwZ8Av6AAvaEAvKIAuqMAuaQAt6UAtqYAtKcAs6gAsqkAsKoArqsArKwAq60Aqa4AqK8Ap7AApbEApLIAorMAmrwAlr8Ak8IArL4A08YA4MsA59AA6tMA7NYA7dkA7twA7N4A6+EA6uMA6OYA5+gA5esA4+0A4u8A4PIAzPsA1vEAw/8ARysAOTEALDUAIjgAGzwAFD8ADkIACEUAA0gA/koA+k0A9U8A8FIA61QA5lcA4VoA3FwA2F8A1WEA0WQAzWYAymkA08YA4MsA59AA6tMA7NYA7dkA7twA7N4A6+EA6uMA6OYA5+gA5esA4+0A4u8A4PIAzPsA1vEAw/8ARysAOTEALDUAIjgAGzwAFD8ADkIACEUAA0gA/koA+k0A9U8A8FIA61QA5lcA4VoA3FwA2F8A1WEA0WQAzWYAymkAxmwAwW4AvHEAuHMAtnQAs3YAsHgArXoAqnwAqH0Apn8ApIAA24wA1pMA0ZUAzJYAx5gAw5kAvpsAuZwAt54AsqAAraEAqaMApaQAoKYAnKcAmakAmKoAlKwAkK0AjK8Ah7AAg7IAgLMAfLUAeLYAc7gAQtIAP9QAPNYAO9gAOdoAONsANt0ANd8ANOAAMuIAMeMAL+UALuYALOgAK+kAKesAKOwADvcAMt8APrwATrkAWrYAZ7MAdLAAgK4AjasAlqgAoqYArqMAs6A=';
-                
                 // Set volumes
-                this.sounds.shoot.volume = 0.8; // Increased volume for shooting sound
+                this.sounds.shoot.volume = 0.8;
                 this.sounds.explosion.volume = 0.7;
                 this.sounds.playerDeath.volume = 0.6;
                 this.sounds.victory.volume = 0.7;
@@ -128,67 +142,29 @@
                     audioControls.textContent = this.muted ? '🔇' : '🔊';
                 });
                 
-                // Setup start button
-                const audioStart = document.getElementById('audioStart');
-                const startButton = audioStart.querySelector('button');
+                // Auto-start the music - try multiple methods
+                // First, try direct playback
+                this.playFallbackMusic(); // Start the original space-age retro music immediately
                 
-                startButton.addEventListener('click', () => {
-                    // Hide the start screen immediately - this is crucial for mobile devices
-                    audioStart.style.display = 'none';
-                    
-                    // iOS special handling - needs special approach
-                    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-                    
-                    if (isIOS) {
-                        console.log("iOS device detected, using special audio handling");
-                        
-                        // Create and play a silent sound first to unlock audio
-                        try {
-                            const silentSound = new Audio();
-                            silentSound.src = "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABQABgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYP/7kGQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEluZm8AAAAPAAAAAwAABHwAPj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj7/+5JkAA/wAABpAAAACAAADSAAAAEAAAGkAAAAIAAANIAAAARMQU1FMy45OS41VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/7kmRAj/AAAGkAAAAIAAANIAAAAQAAAaQAAAAgAAA0gAAABFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV";
-                            silentSound.load();
-                            silentSound.muted = false;
-                            silentSound.play().then(() => {
-                                console.log("Silent sound played successfully, audio unlocked");
-                                
-                                // Now try to resume the audio context
-                                if (this.audioContext) {
-                                    this.audioContext.resume().then(() => {
-                                        console.log("AudioContext resumed successfully");
-                                        this.playStartupSound();
-                                        this.startBackgroundMusic();
-                                    }).catch(e => {
-                                        console.log("AudioContext resume failed:", e);
-                                        this.startBackgroundMusic();
-                                    });
-                                } else {
-                                    this.startBackgroundMusic();
-                                }
-                            }).catch(error => {
-                                console.log("Silent sound failed, trying anyway:", error);
-                                this.startBackgroundMusic();
-                            });
-                        } catch (e) {
-                            console.log("iOS special handling failed:", e);
-                            this.startBackgroundMusic();
-                        }
-                    } else {
-                        // For non-iOS devices
-                        if (this.audioContext && this.audioContext.state === 'suspended') {
-                            this.audioContext.resume().then(() => {
-                                console.log("AudioContext resumed successfully");
-                                this.playStartupSound();
-                                this.startBackgroundMusic();
-                            }).catch(e => {
-                                console.log("AudioContext resume failed:", e);
-                                this.startBackgroundMusic();
-                            });
-                        } else {
-                            this.playStartupSound();
-                            this.startBackgroundMusic();
-                        }
-                    }
+                // Also try HTML5 audio playback as backup
+                this.music.play().catch(() => {
+                    console.log("HTML5 audio playback failed, using fallback music");
+                    // Already started fallback music above, no need to do anything here
                 });
+                
+                // Add event listeners to start music on user interaction if needed
+                document.addEventListener('click', () => {
+                    if (this.audioContext && this.audioContext.state === 'suspended') {
+                        this.audioContext.resume().then(() => {
+                            if (!this.musicStarted) {
+                                this.playFallbackMusic();
+                            }
+                        });
+                    }
+                }, { once: true });
+            },
+            
+            playDecodedMusic: function(buffer) {
             },
             
             playStartupSound: function() {
@@ -219,128 +195,10 @@
                 }
             },
             
-            startBackgroundMusic: function() {
-                // Check if this is iOS - needs special handling
-                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-                
-                if (isIOS) {
-                    console.log("iOS device detected for background music");
-                    
-                    // For iOS, we need to first make sure the audio context is resumed if possible
-                    if (this.audioContext && this.audioContext.state === 'suspended') {
-                        this.audioContext.resume().catch(e => {
-                            console.log("Could not resume audio context for background music:", e);
-                        });
-                    }
-                    
-                    // Use a simpler, more reliable approach for iOS
-                    this.playFallbackMusic();
-                    return;
-                }
-                
-                // For non-iOS devices, continue with the regular approach
-                // Load several music options to improve chances of playback
-                const musicOptions = [
-                    'https://cdn.freesound.org/previews/368/368691_3235105-lq.mp3', // Original music
-                    'https://cdn.freesound.org/previews/353/353546_5450487-lq.mp3', // Backup 1
-                    'https://cdn.freesound.org/previews/415/415991_5356550-lq.mp3'  // Backup 2
-                ];
-                
-                // Try loading each music file
-                let musicLoaded = false;
-                const tryMusic = (index) => {
-                    if (index >= musicOptions.length) {
-                        // If all options fail, use the fallback
-                        console.log("All music options failed, trying fallback");
-                        if (this.audioContext) {
-                            setTimeout(() => this.playFallbackMusic(), 500);
-                        }
-                        return;
-                    }
-                    
-                    this.music.src = musicOptions[index];
-                    this.music.load();
-                    this.music.oncanplaythrough = () => {
-                        if (!musicLoaded) {
-                            musicLoaded = true;
-                            console.log("Music loaded successfully:", this.music.src);
-                            
-                            // Start background music with a short delay
-                            setTimeout(() => {
-                                this.playMusic();
-                            }, 500);
-                        }
-                    };
-                    
-                    this.music.onerror = () => {
-                        console.log("Music loading failed:", this.music.src);
-                        tryMusic(index + 1);
-                    };
-                };
-                
-                // Start with the first option
-                tryMusic(0);
-            },
-            
-            playMusic: function() {
-                if (this.muted) return;
-                
-                // Try to play, but don't worry if it fails due to autoplay policies
-                try {
-                    // Reset audio position
-                    this.music.currentTime = 0;
-                    
-                    // For iOS, make sure the audio context is resumed before playing
-                    if (this.audioContext && this.audioContext.state === 'suspended') {
-                        this.audioContext.resume().then(() => {
-                            // Only after context is resumed, we try to play
-                            this.actuallyPlayMusic();
-                        }).catch(err => {
-                            console.log("Failed to resume audio context:", err);
-                            // Try to play anyway, it might work on some devices
-                            this.actuallyPlayMusic();
-                        });
-                    } else {
-                        // For other browsers, play directly
-                        this.actuallyPlayMusic();
-                    }
-                } catch (e) {
-                    console.log("Music setup failed:", e);
-                    
-                    // Try with backup URL
-                    if (this.music.src !== this.backupMusic) {
-                        this.music.src = this.backupMusic;
-                        this.music.load();
-                        setTimeout(() => this.playMusic(), 100);
-                    } else if (this.audioContext) {
-                        this.playFallbackMusic();
-                    }
-                }
-            },
-            
-            actuallyPlayMusic: function() {
-                const playPromise = this.music.play();
-                
-                if (playPromise !== undefined) {
-                    playPromise.catch(e => {
-                        console.log("Music playback failed:", e);
-                        
-                        // Try with backup music URL if the first one fails
-                        if (this.music.src !== this.backupMusic) {
-                            console.log("Trying backup music URL...");
-                            this.music.src = this.backupMusic;
-                            this.music.load();
-                            setTimeout(() => this.playMusic(), 100);
-                        } else if (this.audioContext) {
-                            // Last resort - try using the AudioContext for music
-                            this.playFallbackMusic();
-                        }
-                    });
-                }
-            },
-            
             playFallbackMusic: function() {
                 if (this.muted || !this.audioContext) return;
+                
+                this.musicStarted = true;
                 
                 // Create a space-age retro background music using oscillators
                 try {
@@ -540,6 +398,42 @@
                 }
             },
             
+            toggleMute: function() {
+                this.muted = !this.muted;
+                
+                if (this.muted) {
+                    // Stop Web Audio API music
+                    if (this.activeOscillators) {
+                        this.activeOscillators.forEach(osc => {
+                            try { osc.stop(); } catch(e) {}
+                        });
+                    }
+                    if (this.musicInterval) {
+                        clearInterval(this.musicInterval);
+                    }
+                    if (this.arpeggioInterval) {
+                        clearInterval(this.arpeggioInterval);
+                    }
+                    
+                    // Pause HTML5 audio
+                    this.music.pause();
+                    
+                    // Stop all playing sound effects
+                    Object.values(this.sounds).forEach(sound => {
+                        if (!sound.paused) {
+                            sound.pause();
+                            sound.currentTime = 0;
+                        }
+                    });
+                } else {
+                    // Restart music
+                    this.playFallbackMusic();
+                    
+                    // Also try HTML5 audio as backup
+                    this.music.play().catch(() => {});
+                }
+            },
+            
             play: function(sound) {
                 if (this.muted) return;
                 if (!this.sounds[sound]) return;
@@ -698,24 +592,6 @@
                 setTimeout(function() {
                     errorMsg.style.display = 'none';
                 }, 5000);
-            },
-            
-            toggleMute: function() {
-                this.muted = !this.muted;
-                
-                if (this.muted) {
-                    this.music.pause();
-                    
-                    // Stop all playing sound effects
-                    Object.values(this.sounds).forEach(sound => {
-                        if (!sound.paused) {
-                            sound.pause();
-                            sound.currentTime = 0;
-                        }
-                    });
-                } else {
-                    this.playMusic();
-                }
             }
         };
         
