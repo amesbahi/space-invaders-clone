@@ -113,7 +113,7 @@
                 this.music = new Audio();
                 this.music.src = 'https://cdn.freesound.org/previews/368/368691_3235105-lq.mp3';
                 this.music.loop = true;
-                this.music.volume = 0.4;
+                this.music.volume = 1;
                 this.music.preload = 'auto';
                 
                 // Add a backup music URL in case the first one fails
@@ -126,10 +126,10 @@
                 this.sounds.victory = new Audio('https://cdn.freesound.org/previews/320/320775_5260872-lq.mp3');
                 
                 // Set volumes
-                this.sounds.shoot.volume = 0.8;
-                this.sounds.explosion.volume = 0.7;
-                this.sounds.playerDeath.volume = 0.6;
-                this.sounds.victory.volume = 0.7;
+                this.sounds.shoot.volume = 0.08;
+                this.sounds.explosion.volume = 0.08;
+                this.sounds.playerDeath.volume = 0.15;
+                this.sounds.victory.volume = 0.2;
                 
                 // Preload all sounds
                 const audioElements = [this.music, ...Object.values(this.sounds)];
